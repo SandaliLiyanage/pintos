@@ -128,6 +128,7 @@ pintos_init (void)
 #endif
 
   printf ("Boot complete.\n");
+
   
   if (*argv != NULL) {
     /* Run actions specified on kernel command line. */
