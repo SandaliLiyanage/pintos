@@ -24,7 +24,7 @@
 #include "threads/thread.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include <syscall-nr.h>
+#include "devices/intq.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/exception.h"
@@ -67,15 +67,15 @@ static char **read_command_line (void);
 static char **parse_options (char **argv);
 static void run_actions (char **argv);
 static void usage (void);
-static void read_line (char line[], size_t size);
-static bool backspace (char **pos, char line[]);
+uint8_t input_getc (void);
+void input_init (void);
 #ifdef FILESYS
 static void locate_block_devices (void);
 static void locate_block_device (enum block_type, const char *name);
 #endif
 
 int pintos_init (void) NO_RETURN;
-
+static struct intq buffer;
 /* Pintos main entry point. */
 int
 pintos_init (void)
@@ -132,29 +132,43 @@ pintos_init (void)
 #endif
 
   printf ("Boot complete.\n");
-
+  
+  
   if (*argv != NULL) {
     /* Run actions specified on kernel command line. */
     run_actions (argv);
   } else {
-    printf("CS2042>");
-    char command[80];
-    read_line (command, sizeof command);
-    if(!strcmp(command, "whoami")){
-      printf("LiyanageP.L.D.S.K  ");
-    }
-    //for(;;){
-      
-      /*else if(!strcmp(command, "whoami")){
-        printf("LiyanageP.L.D.S.K  ");
-        printf("210344U");
+    for(;;){
+      printf("C2042>");
+      intr_disable();
+      input_init();
+      char input_buffer[1024]; // Adjust the buffer size as needed
+      int index = 0;
+
+      for(;;){
+        uint8_t key = input_getc();
+        if(key == '\n'){
+          printf("\n");
+          input_buffer[index] = '\0';
+          break;
+        }
+        else{
+          //input_putc(key);
+          if(index < sizeof(input_buffer)-1){
+            input_buffer[index]=key;
+            index++;
+          }
+          printf("%c", key);
+          continue;
+
+        }
+        
+
       }
-      else if(!strcmp(command, "shutdown")){
-        break;
-      }*/
+      
     }
     // TODO: no command line passed to kernel. Run interactively 
-  //}
+    }
 
   /* Finish up. */
   shutdown ();
@@ -452,53 +466,3 @@ locate_block_device (enum block_type role, const char *name)
     }
 }
 #endif
-static void
-read_line (char line[], size_t size) 
-{
-  char *pos = line;
-  for (;;)
-    {
-      char c;
-      read (STDIN_FILENO, &c, 1);
-
-      switch (c) 
-        {
-        case '\r':
-          *pos = '\0';
-          putchar ('\n');
-          return;
-
-        case '\b':
-          backspace (&pos, line);
-          break;
-
-        case ('U' - 'A') + 1:       /* Ctrl+U. */
-          while (backspace (&pos, line))
-            continue;
-          break;
-
-        default:
-          /* Add character to line. */
-          if (pos < line + size - 1) 
-            {
-              putchar (c);
-              *pos++ = c;
-            }
-          break;
-        }
-    }
-}
-static bool
-backspace (char **pos, char line[]) 
-{
-  if (*pos > line)
-    {
-      /* Back up cursor, overwrite character, back up
-         again. */
-      printf ("\b \b");
-      (*pos)--;
-      return true;
-    }
-  else
-    return false;
-}
