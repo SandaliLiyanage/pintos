@@ -139,15 +139,15 @@ pintos_init (void)
     run_actions (argv);
   } else {
     for(;;){
-      printf("C2042>");
       intr_disable();
+      printf("C2042>");
       input_init();
-      char input_buffer[1024]; // Adjust the buffer size as needed
+      char input_buffer[1024]; 
       int index = 0;
 
       for(;;){
         uint8_t key = input_getc();
-        if(key == '\n'){
+        if(key == '\n' || key == '\r'){
           printf("\n");
           input_buffer[index] = '\0';
           break;
@@ -162,9 +162,22 @@ pintos_init (void)
           continue;
 
         }
-        
+  
 
       }
+        if(!strcmp(input_buffer, "whoami")){
+          printf("Liyanage P.L.D.S.K      ");
+          printf("210344U");
+          printf("\n");
+        }
+        else if(!strcmp(input_buffer, "shutdown")){
+          shutdown();
+          thread_exit();
+        }
+        else if(!strcmp(input_buffer, "time")){
+
+        }
+
       
     }
     // TODO: no command line passed to kernel. Run interactively 
