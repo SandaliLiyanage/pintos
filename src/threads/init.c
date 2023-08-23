@@ -147,10 +147,18 @@ pintos_init (void)
 
       for(;;){
         uint8_t key = input_getc();
+
         if(key == '\n' || key == '\r'){
           printf("\n");
           input_buffer[index] = '\0';
           break;
+        }
+        else if(key == '\b'){
+          if(index > 0){
+            index --;
+            printf("\b \b");
+          }
+
         }
         else{
           //input_putc(key);
@@ -175,13 +183,28 @@ pintos_init (void)
           thread_exit();
         }
         else if(!strcmp(input_buffer, "time")){
-
+          time_t time = rtc_get_time();
+          printf("%d\n", time);
         }
+        // else if(!strcmp(input_buffer, "ram")){
 
+        // }
+        // else if(!strcmp(input_buffer, "thread")){
+        //   thread_print_stat();
+        // }
+        // else if(!strcmp(input_buffer, "priority")){
+
+        // }
+        // else if(!strcmp(input_buffer, "time")){
+
+        // }
+        // else if(!strcmp(input_buffer, "exit")){
+        //   break;
+        // }
       
     }
     // TODO: no command line passed to kernel. Run interactively 
-    }
+  }
 
   /* Finish up. */
   shutdown ();
