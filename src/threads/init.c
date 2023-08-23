@@ -69,6 +69,10 @@ static void run_actions (char **argv);
 static void usage (void);
 uint8_t input_getc (void);
 void input_init (void);
+void shutdown_power_off (void);
+void thread_print_stats (void);
+
+int thread_get_priority (void);
 #ifdef FILESYS
 static void locate_block_devices (void);
 static void locate_block_device (enum block_type, const char *name);
@@ -161,7 +165,6 @@ pintos_init (void)
 
         }
         else{
-          //input_putc(key);
           if(index < sizeof(input_buffer)-1){
             input_buffer[index]=key;
             index++;
@@ -170,7 +173,6 @@ pintos_init (void)
           continue;
 
         }
-  
 
       }
         if(!strcmp(input_buffer, "whoami")){
@@ -179,31 +181,30 @@ pintos_init (void)
           printf("\n");
         }
         else if(!strcmp(input_buffer, "shutdown")){
-          shutdown();
+          shutdown_power_off ();
           thread_exit();
         }
         else if(!strcmp(input_buffer, "time")){
           time_t time = rtc_get_time();
           printf("%d\n", time);
         }
-        // else if(!strcmp(input_buffer, "ram")){
-
-        // }
-        // else if(!strcmp(input_buffer, "thread")){
-        //   thread_print_stat();
-        // }
-        // else if(!strcmp(input_buffer, "priority")){
-
-        // }
-        // else if(!strcmp(input_buffer, "time")){
-
-        // }
-        // else if(!strcmp(input_buffer, "exit")){
-        //   break;
-        // }
-      
+        else if(!strcmp(input_buffer, "ram")){
+          printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
+          init_ram_pages * PGSIZE / 1024);
+        }
+        else if(!strcmp(input_buffer, "thread")){
+          thread_print_stats();
+        }
+        else if(!strcmp(input_buffer, "priority")){
+          int priority_thread = thread_get_priority();
+          printf("The current thread priority is %d\n", priority_thread);
+        }
+        
+        else if(!strcmp(input_buffer, "exit")){
+          break;
+        }
     }
-    // TODO: no command line passed to kernel. Run interactively 
+     // TODO: no command line passed to kernel. Run interactively 
   }
 
   /* Finish up. */
