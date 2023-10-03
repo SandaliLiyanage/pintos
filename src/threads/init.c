@@ -189,7 +189,7 @@ pintos_init (void)
           printf("%d\n", time);
         }
         else if(!strcmp(input_buffer, "ram")){
-          printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
+          printf ("Amount of RAM available is %'"PRIu32" kB RAM...\n",
           init_ram_pages * PGSIZE / 1024);
         }
         else if(!strcmp(input_buffer, "thread")){
