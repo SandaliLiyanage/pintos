@@ -301,19 +301,68 @@ thread_exit (void)
 void
 thread_yield (void) 
 {
-  struct thread *cur = thread_current ();
+  struct thread *cur = thread_current (); //pointer to a current thread
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
 
-  old_level = intr_disable ();
+  old_level = intr_disable ();  //disable intr
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_push_back (&ready_list, &cur->elem);     //put to the end of the ready list
   cur->status = THREAD_READY;
-  schedule ();
-  intr_set_level (old_level);
+  schedule ();      //context switch
+  intr_set_level (old_level);   
+}
+static const
+boolcompare_thread_ticks(const struct list_elem *a, const struct list_elem *b, void aux){
+  struct thread * thread_a(a,struct thread,elem);
+  struct thread * thread_b(b, struct thread, elem);
+  return thread_a->wakeup_tick > thread_b-> wakeup_tick;
 }
 
+ /* if
+    the current thread is not idle thread,
+    change the state of the caller thread to BLOCKED
+    store the local tick to wake up,
+    TODO: update the global tick if necessary,
+    and call schedule() */
+
+void 
+thread_sleep(int64_t wakeup_ticks){
+ 
+  struct thread *cur = thread_current ();
+  enum intr_level old_level;
+  ASSERT(!intr_context());
+  old_level = intr_disable();
+
+  if(cur != idle_thread){
+    cur -> wakeup_tick = wakeup_ticks;
+    list_push_back(&sleep_list, &cur->elem);
+    cur->status = THREAD_BLOCKED;
+    schedule();
+  }
+  
+  intr_set_level (old_level);
+  //thread_block(cur);
+
+}
+/* Check sleep list
+  Find any threads to wake up and the global tick
+  move them to ready list if necessary
+  TODO: update the global tick */
+void 
+thread_wakeup(int64_t ticks)
+{
+  struct list_elem *e;
+  struct thread*t;
+  for(e = list_begin(&sleep_list); e!=list_end(&sleep_list); e= list_next(e)){
+    t=list_entry(e, struct thread, elem);
+    if(ticks >= t-> wakeup_tick){
+      list_remove(e);
+      thread_unblock(t);
+    }
+  }
+}
 /* Invoke function 'func' on all threads, passing along 'aux'.
    This function must be called with interrupts off. */
 void
@@ -578,6 +627,7 @@ allocate_tid (void)
 
   return tid;
 }
+
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
