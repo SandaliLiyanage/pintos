@@ -23,7 +23,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-
+static struct list sleep_list;
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -92,6 +92,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&sleep_list);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -200,6 +201,9 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  if(thread_get_priority < priority){
+    thread_yield();
+  }
 
   return tid;
 }
@@ -238,6 +242,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
+  list_insert_ordered(&ready_list, & t->elem, cmp_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -313,11 +318,12 @@ thread_yield (void)
   schedule ();      //context switch
   intr_set_level (old_level);   
 }
-static const
-boolcompare_thread_ticks(const struct list_elem *a, const struct list_elem *b, void aux){
-  struct thread * thread_a(a,struct thread,elem);
-  struct thread * thread_b(b, struct thread, elem);
-  return thread_a->wakeup_tick > thread_b-> wakeup_tick;
+static const 
+bool 
+compare_thread_ticks(const struct list_elem *a, const struct list_elem *b, void *aux){
+  struct thread *thread_a = list_entry(a, struct thread, elem);
+  struct thread *thread_b = list_entry(b, struct thread, elem);
+  return thread_a->wakeup_tick > thread_b->wakeup_tick;
 }
 
  /* if
@@ -327,39 +333,42 @@ boolcompare_thread_ticks(const struct list_elem *a, const struct list_elem *b, v
     TODO: update the global tick if necessary,
     and call schedule() */
 
-void 
-thread_sleep(int64_t wakeup_ticks){
- 
-  struct thread *cur = thread_current ();
+void
+thread_sleep(int64_t wakeup_ticks)
+{
+  struct thread *cur = thread_current();
   enum intr_level old_level;
+
   ASSERT(!intr_context());
+
   old_level = intr_disable();
-
-  if(cur != idle_thread){
-    cur -> wakeup_tick = wakeup_ticks;
-    list_push_back(&sleep_list, &cur->elem);
-    cur->status = THREAD_BLOCKED;
-    schedule();
+  if (cur != idle_thread) {
+    cur->wakeup_tick = wakeup_ticks;
+    list_insert_ordered(&sleep_list, &cur->elem, (list_less_func *) &compare_thread_ticks, NULL);
+    thread_block();
   }
-  
-  intr_set_level (old_level);
-  //thread_block(cur);
 
+  intr_set_level (old_level);
 }
 /* Check sleep list
   Find any threads to wake up and the global tick
   move them to ready list if necessary
   TODO: update the global tick */
-void 
+void
 thread_wakeup(int64_t ticks)
 {
+  // loop through the sleep list
   struct list_elem *e;
-  struct thread*t;
-  for(e = list_begin(&sleep_list); e!=list_end(&sleep_list); e= list_next(e)){
-    t=list_entry(e, struct thread, elem);
-    if(ticks >= t-> wakeup_tick){
+  struct thread *t;
+  for (e = list_begin(&sleep_list); e != list_end(&sleep_list); e = list_next(e)) {
+    t = list_entry(e, struct thread, elem);
+    if (ticks >= t->wakeup_tick) {
+      // remove the thread from the sleep list
       list_remove(e);
+      
+      // wake up the thread
       thread_unblock(t);
+      break;
     }
   }
 }
