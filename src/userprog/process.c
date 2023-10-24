@@ -209,7 +209,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char* args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -438,24 +438,121 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+#define DEFAULT_ARG_SIZE 3
+
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, const char* args) 
 {
+  /*raw file name should be passed as args*/
+  char* _args;
+  char* save_ptr, exec_name, token;
+  int argc = 0;    //arg count	
+  int byte_size = 0;    //total size of the arguments in bytes
+  char * args_array;    //an array to store the separated arguments
+  char * args_addr_array;
+  
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success){
         *esp = PHYS_BASE;
-      else
+
+        //make a copy of the raw file name(args) for future use
+        _args = palloc_get_page(0);
+        if(_args == NULL){
+          return TID_ERROR;
+        }
+        strlcpy(_args, args, PGSIZE);
+
+        //allocate space to the arg list
+        args_array = malloc(DEFAULT_ARG_SIZE* sizeof(char*));
+
+        exec_name =strtok_r(args, " ", &save_ptr);      //  executable file name
+        args_array[0] = exec_name;
+        byte_size += strlen(exec_name) + 1;    //1 for the null terminator
+        argc ++;
+
+        //parse the argument using strtok_r and store them in the arg list
+        for (token = strtok_r (args, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+
+          if(argc > DEFAULT_ARG_SIZE){
+            args_array = realloc(args_array, argc * sizeof(char*));
+          }
+          byte_size += strlen(token) + 1;    //1 for the null terminator
+          args_array[argc] = token;        //append to the arg list
+          argc++;    
+
+        }
+
+        int len_arg;
+
+        /*Write each argument (including the executable name) in reverse order, as well as in reverse
+        for each string, to the stack. write a \0 for each argument*/
+        for (int i = argc-1; i >= 0; i--){
+          len_arg = strlen(args_array[i]) + 1;    //1 for the null terminator
+          *esp -= len_arg;
+          args_addr_array[i] = *esp;
+          memcpy(*esp, args_array[i], len_arg);     //copies size byte from args_array[i] to *esp
+
+          
+        }
+        /*Write the necessary number of 0s to word-align to 4 bytes*/
+        int word_align = byte_size % 4;
+
+        if(word_align != 0){
+          word_align = 4 - word_align;
+          *esp -= word_align;
+          memset(*esp, 0, word_align);
+        }
+          
+        /*Write the last argument, consisting of four bytes of 0’s*/
+        // *esp -= sizeof(char*);
+        // *(char *) *esp = 0;
+
+        *esp -= sizeof(uint32_t);
+        memset(*esp, 0, sizeof(uint32_t));
+
+        // save the pointers to the stack
+        for (int i=argc-1; i>=0; i--) {
+          *esp -= sizeof(char*);
+          // printf("arg %d addr %p at %p\n", i-1, args_addr_array[i-1], *esp);
+          *(int *) *esp = (unsigned) args_addr_array[i];
+        }
+
+        // save address of pointer to array of pointers to args(Write the address of argv[0])
+        void *temp = *esp;      //current pointer is at the address of argv[0]
+        *esp -= sizeof(char**);
+        // printf("arg pointers arr addr at %p\n", *esp);
+        memcpy(*esp, &temp, sizeof(char**));
+
+        // Write the number of arguments (argc). Make sure that this spans over 4 bytes
+        *esp -= sizeof(int);
+        // printf("arg count at %p\n", *esp);
+        memcpy(*esp, &argc, 1);
+
+        // a NULL pointer as the return address
+        *esp -= sizeof(void*);
+
+        /*free assigned*/
+        free(args_addr_array);
+        free(args_array);
+        palloc_free_page (_args);
+        }
+        
+        
+      else{
         palloc_free_page (kpage);
-    }
+      }
+        
   return success;
+    }
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
