@@ -28,7 +28,9 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy ;   //copy of the raw file name
+  char *save_ptr;
+  char *exec_name;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -38,10 +40,13 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  exec_name = malloc(strlen(file_name)+1);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  free(exec_name);
   return tid;
 }
 
@@ -50,6 +55,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  //file name is the fn_copy passed in as an argument
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -60,6 +66,12 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+
+
+  /*struct thread *curr_t = thread_current();
+  curr_t->status_load_success = success;
+  sema_up(&curr_t->init_sema);*/
+  
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -88,7 +100,9 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  while(true){
+    thread_yeild();
+  }
 }
 
 /* Free the current process's resources. */
