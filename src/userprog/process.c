@@ -1,4 +1,5 @@
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -17,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -41,6 +43,8 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   exec_name = malloc(strlen(file_name)+1);
+  strlcpy (exec_name, file_name, strlen(file_name)+1);
+  exec_name = strtok_r((char*) exec_name, " ", &save_ptr );
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (exec_name, PRI_DEFAULT, start_process, fn_copy);
@@ -101,7 +105,7 @@ int
 process_wait (tid_t child_tid UNUSED) 
 {
   while(true){
-    thread_yeild();
+    thread_yield();
   }
 }
 
@@ -209,7 +213,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char* args);
+static bool setup_stack (void **esp, const char* args);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -316,7 +320,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, file_name))
     goto done;
 
   /* Start address. */
@@ -447,11 +451,11 @@ setup_stack (void **esp, const char* args)
 {
   /*raw file name should be passed as args*/
   char* _args;
-  char* save_ptr, exec_name, token;
+  char* save_ptr,  *token;
   int argc = 0;    //arg count	
   int byte_size = 0;    //total size of the arguments in bytes
-  char * args_array;    //an array to store the separated arguments
-  char * args_addr_array;
+  char ** args_array;    //an array to store the separated arguments
+  char ** args_addr_array;
   
   uint8_t *kpage;
   bool success = false;
@@ -473,14 +477,12 @@ setup_stack (void **esp, const char* args)
 
         //allocate space to the arg list
         args_array = malloc(DEFAULT_ARG_SIZE* sizeof(char*));
+        args_addr_array = malloc(argc*sizeof(char*));
 
-        exec_name =strtok_r(args, " ", &save_ptr);      //  executable file name
-        args_array[0] = exec_name;
-        byte_size += strlen(exec_name) + 1;    //1 for the null terminator
-        argc ++;
+        
 
         //parse the argument using strtok_r and store them in the arg list
-        for (token = strtok_r (args, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
+        for (token = strtok_r (_args, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)){
 
           if(argc > DEFAULT_ARG_SIZE){
             args_array = realloc(args_array, argc * sizeof(char*));
